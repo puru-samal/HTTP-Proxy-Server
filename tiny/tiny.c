@@ -6,28 +6,29 @@
  * Fixed some style issues, stop using csapp functions where not appropriate
  *
  *
- * Updated 11/2022 - Gilbert Fan <gsfan@andrew.cmu.edu>, Adittyo Paul <adittyop@andrew.cmu.edu>
- * Updated tiny to use http_parser instead of sscanf. Also changed
- * parse_uri into parse_path instead as the parsed string is a PATH.
+ * Updated 11/2022 - Gilbert Fan <gsfan@andrew.cmu.edu>, Adittyo Paul
+ * <adittyop@andrew.cmu.edu> Updated tiny to use http_parser instead of sscanf.
+ * Also changed parse_uri into parse_path instead as the parsed string is a
+ * PATH.
  */
 
 #include "csapp.h"
 #include "http_parser.h"
 
+#include <ctype.h>
+#include <stdbool.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
-#include <stdbool.h>
 #include <unistd.h>
-#include <ctype.h>
 
 #include <fcntl.h>
-#include <sys/stat.h>
+#include <netdb.h>
+#include <netinet/in.h>
 #include <sys/mman.h>
+#include <sys/stat.h>
 #include <sys/types.h>
 #include <sys/wait.h>
-#include <netinet/in.h>
-#include <netdb.h>
 
 #define HOSTLEN 256
 #define SERVLEN 8
@@ -37,20 +38,15 @@ typedef struct sockaddr SA;
 
 /* Information about a connected client. */
 typedef struct {
-    struct sockaddr_in addr;    // Socket address
-    socklen_t addrlen;          // Socket address length
-    int connfd;                 // Client connection file descriptor
-    char host[HOSTLEN];         // Client host
-    char serv[SERVLEN];         // Client service (port)
+    struct sockaddr_in addr; // Socket address
+    socklen_t addrlen;       // Socket address length
+    int connfd;              // Client connection file descriptor
+    char host[HOSTLEN];      // Client host
+    char serv[SERVLEN];      // Client service (port)
 } client_info;
 
 /* URI parsing results. */
-typedef enum {
-    PARSE_ERROR,
-    PARSE_STATIC,
-    PARSE_DYNAMIC
-} parse_result;
-
+typedef enum { PARSE_ERROR, PARSE_STATIC, PARSE_DYNAMIC } parse_result;
 
 /*
  * parse_path - parse PATH into filename and CGI args
@@ -67,21 +63,22 @@ parse_result parse_path(const char *path, char *filename, char *cgiargs) {
     /* Prepend "/" to PATH so it begins with a proper filepath */
     char path_name[MAXLINE];
     if (snprintf(path_name, MAXLINE, "/%s", path) >= MAXLINE) {
-    	return PARSE_ERROR; // Overflow!
+        return PARSE_ERROR; // Overflow!
     }
 
     /* Check if the URI contains "cgi-bin" */
-    if (strncmp(path_name, "/cgi-bin/", strlen("/cgi-bin/")) == 0) { /* Dynamic content */
-        char *args = strchr(path_name, '?');  /* Find the CGI args */
+    if (strncmp(path_name, "/cgi-bin/", strlen("/cgi-bin/")) ==
+        0) {                                 /* Dynamic content */
+        char *args = strchr(path_name, '?'); /* Find the CGI args */
         if (!args) {
-            *cgiargs = '\0';    /* No CGI args */
+            *cgiargs = '\0'; /* No CGI args */
         } else {
             /* Format the CGI args */
             if (snprintf(cgiargs, MAXLINE, "%s", args + 1) >= MAXLINE) {
                 return PARSE_ERROR; // Overflow!
             }
 
-            *args = '\0';   /* Remove the args from the URI string */
+            *args = '\0'; /* Remove the args from the URI string */
         }
 
         /* Format the filename */
@@ -105,8 +102,8 @@ parse_result parse_path(const char *path, char *filename, char *cgiargs) {
     bool is_dir = path_name[strnlen(path_name, MAXLINE) - 1] == '/';
 
     /* Format the filename; if requesting a directory, use the home file */
-    if (snprintf(filename, MAXLINE, ".%s%s",
-                 path_name, is_dir ? "home.html" : "") >= MAXLINE) {
+    if (snprintf(filename, MAXLINE, ".%s%s", path_name,
+                 is_dir ? "home.html" : "") >= MAXLINE) {
         return PARSE_ERROR; // Overflow!
     }
 
@@ -134,7 +131,6 @@ void get_filetype(char *filename, char *filetype) {
     }
 }
 
-
 /*
  * serve_static - copy a file back to the client
  */
@@ -150,12 +146,12 @@ void serve_static(int fd, char *filename, int filesize) {
 
     /* Send response headers to client */
     buflen = snprintf(buf, MAXBUF,
-            "HTTP/1.0 200 OK\r\n" \
-            "Server: Tiny Web Server\r\n" \
-            "Connection: close\r\n" \
-            "Content-Length: %d\r\n" \
-            "Content-Type: %s\r\n\r\n", \
-            filesize, filetype);
+                      "HTTP/1.0 200 OK\r\n"
+                      "Server: Tiny Web Server\r\n"
+                      "Connection: close\r\n"
+                      "Content-Length: %d\r\n"
+                      "Content-Type: %s\r\n\r\n",
+                      filesize, filetype);
     if (buflen >= MAXBUF) {
         return; // Overflow!
     }
@@ -166,7 +162,6 @@ void serve_static(int fd, char *filename, int filesize) {
         fprintf(stderr, "Error writing static response headers to client\n");
         return;
     }
-
 
     /* Send response body to client */
     srcfd = open(filename, O_RDONLY, 0);
@@ -202,12 +197,12 @@ void serve_dynamic(int fd, char *filename, char *cgiargs) {
     printf("SERVE DYNAMIC\n");
     char buf[MAXLINE];
     size_t buflen;
-    char *emptylist[] = { NULL };
+    char *emptylist[] = {NULL};
 
     /* Format first part of HTTP response */
     buflen = snprintf(buf, MAXLINE,
-            "HTTP/1.0 200 OK\r\n" \
-            "Server: Tiny Web Server\r\n");
+                      "HTTP/1.0 200 OK\r\n"
+                      "Server: Tiny Web Server\r\n");
     if (buflen >= MAXLINE) {
         return; // Overflow!
     }
@@ -230,10 +225,9 @@ void serve_dynamic(int fd, char *filename, char *cgiargs) {
         /* Run CGI program */
         if (execve(filename, emptylist, environ) < 0) {
             perror(filename);
-            exit(1);  /* Exit child process */
+            exit(1); /* Exit child process */
         }
-    }
-    else if (pid == -1) {
+    } else if (pid == -1) {
         perror("fork");
         return;
     }
@@ -257,25 +251,25 @@ void clienterror(int fd, const char *errnum, const char *shortmsg,
 
     /* Build the HTTP response body */
     bodylen = snprintf(body, MAXBUF,
-            "<!DOCTYPE html>\r\n" \
-            "<html>\r\n" \
-            "<head><title>Tiny Error</title></head>\r\n" \
-            "<body bgcolor=\"ffffff\">\r\n" \
-            "<h1>%s: %s</h1>\r\n" \
-            "<p>%s</p>\r\n" \
-            "<hr /><em>The Tiny Web server</em>\r\n" \
-            "</body></html>\r\n", \
-            errnum, shortmsg, longmsg);
+                       "<!DOCTYPE html>\r\n"
+                       "<html>\r\n"
+                       "<head><title>Tiny Error</title></head>\r\n"
+                       "<body bgcolor=\"ffffff\">\r\n"
+                       "<h1>%s: %s</h1>\r\n"
+                       "<p>%s</p>\r\n"
+                       "<hr /><em>The Tiny Web server</em>\r\n"
+                       "</body></html>\r\n",
+                       errnum, shortmsg, longmsg);
     if (bodylen >= MAXBUF) {
         return; // Overflow!
     }
 
     /* Build the HTTP response headers */
     buflen = snprintf(buf, MAXLINE,
-            "HTTP/1.0 %s %s\r\n" \
-            "Content-Type: text/html\r\n" \
-            "Content-Length: %zu\r\n\r\n", \
-            errnum, shortmsg, bodylen);
+                      "HTTP/1.0 %s %s\r\n"
+                      "Content-Type: text/html\r\n"
+                      "Content-Length: %zu\r\n\r\n",
+                      errnum, shortmsg, bodylen);
     if (buflen >= MAXLINE) {
         return; // Overflow!
     }
@@ -312,14 +306,14 @@ bool read_requesthdrs(client_info *client, rio_t *rp, parser_t *parser) {
         }
 
         // Parse the request header with parser
-	    parser_state parse_state = parser_parse_line(parser, buf);
+        parser_state parse_state = parser_parse_line(parser, buf);
         if (parse_state != HEADER) {
-	        clienterror(client->connfd, "400", "Bad Request",
-			"Tiny could not parse request headers");
-	        return true;
-	    }
+            clienterror(client->connfd, "400", "Bad Request",
+                        "Tiny could not parse request headers");
+            return true;
+        }
 
-	    header_t *header = parser_retrieve_next_header(parser);
+        header_t *header = parser_retrieve_next_header(parser);
         printf("%s: %s\n", header->name, header->value);
     }
 }
@@ -330,15 +324,12 @@ bool read_requesthdrs(client_info *client, rio_t *rp, parser_t *parser) {
 void serve(client_info *client) {
     // Get some extra info about the client (hostname/port)
     // This is optional, but it's nice to know who's connected
-    int res = getnameinfo(
-            (SA *) &client->addr, client->addrlen,
-            client->host, sizeof(client->host),
-            client->serv, sizeof(client->serv),
-            0);
+    int res = getnameinfo((SA *)&client->addr, client->addrlen, client->host,
+                          sizeof(client->host), client->serv,
+                          sizeof(client->serv), 0);
     if (res == 0) {
         printf("Accepted connection from %s:%s\n", client->host, client->serv);
-    }
-    else {
+    } else {
         fprintf(stderr, "getnameinfo failed: %s\n", gai_strerror(res));
     }
 
@@ -360,9 +351,9 @@ void serve(client_info *client) {
 
     if (parse_state != REQUEST) {
         parser_free(parser);
-	    clienterror(client->connfd, "400", "Bad Request",
-		    "Tiny received a malformed request");
-	    return;
+        clienterror(client->connfd, "400", "Bad Request",
+                    "Tiny received a malformed request");
+        return;
     }
 
     /* Tiny only cares about METHOD and PATH from the request */
@@ -372,23 +363,23 @@ void serve(client_info *client) {
 
     /* Check that the method is GET */
     if (strcmp(method, "GET") != 0) {
-	    parser_free(parser);
-    	clienterror(client->connfd, "501", "Not Implemented",
-		    "Tiny does not implement this method");
-    	return;
+        parser_free(parser);
+        clienterror(client->connfd, "501", "Not Implemented",
+                    "Tiny does not implement this method");
+        return;
     }
 
     /* Check if reading request headers caused an error */
     if (read_requesthdrs(client, &rio, parser)) {
         parser_free(parser);
-	    return;
+        return;
     }
 
     /* Parse URI from GET request */
     char filename[MAXLINE], cgiargs[MAXLINE];
     parse_result result = parse_path(path, filename, cgiargs);
     if (result == PARSE_ERROR) {
-	    parser_free(parser);
+        parser_free(parser);
         clienterror(client->connfd, "400", "Bad Request",
                     "Tiny could not parse the request URI");
         return;
@@ -397,8 +388,8 @@ void serve(client_info *client) {
     /* Attempt to stat the file */
     struct stat sbuf;
     if (stat(filename, &sbuf) < 0) {
-    	parser_free(parser);
-	    clienterror(client->connfd, "404", "Not found",
+        parser_free(parser);
+        clienterror(client->connfd, "404", "Not found",
                     "Tiny couldn't find this file");
         return;
     }
@@ -406,15 +397,15 @@ void serve(client_info *client) {
     if (result == PARSE_STATIC) { /* Serve static content */
         if (!(S_ISREG(sbuf.st_mode)) || !(S_IRUSR & sbuf.st_mode)) {
             parser_free(parser);
-	    clienterror(client->connfd, "403", "Forbidden",
+            clienterror(client->connfd, "403", "Forbidden",
                         "Tiny couldn't read the file");
             return;
         }
         serve_static(client->connfd, filename, sbuf.st_size);
     } else { /* Serve dynamic content */
         if (!(S_ISREG(sbuf.st_mode)) || !(S_IXUSR & sbuf.st_mode)) {
- 	    parser_free(parser);
-     	    clienterror(client->connfd, "403", "Forbidden",
+            parser_free(parser);
+            clienterror(client->connfd, "403", "Forbidden",
                         "Tiny couldn't run the CGI program");
             return;
         }
@@ -449,8 +440,8 @@ int main(int argc, char **argv) {
         client->addrlen = sizeof(client->addr);
 
         /* accept() will block until a client connects to the port */
-        client->connfd = accept(listenfd,
-                (SA *) &client->addr, &client->addrlen);
+        client->connfd =
+            accept(listenfd, (SA *)&client->addr, &client->addrlen);
         if (client->connfd < 0) {
             perror("accept");
             continue;
@@ -461,4 +452,3 @@ int main(int argc, char **argv) {
         close(client->connfd);
     }
 }
-
