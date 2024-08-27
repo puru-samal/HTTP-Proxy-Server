@@ -1,6 +1,6 @@
 # HTTP Proxy Server
 
-A concurrent web proxy server that accepts incoming connections, reads and parses HTTP/1.0 GET requests, forwards requests to web servers, reads the servers’ responses, and forwards the responses to the corresponding clients. The `socket` libray is used to communicate over network connections. Tested on `64-bit Ubuntu 22.04.1 LTS (Linux kernel 5.15.0)`.
+A concurrent web proxy server that accepts incoming connections, reads and parses HTTP/1.0 GET requests, forwards requests to web servers, reads the servers’ responses, and forwards the responses to the corresponding clients. The `socket` libray is used to communicate over network connections. Uses `POSIX` threads to deal with multiple clients concurrently. Tested on `64-bit Ubuntu 22.04.1 LTS (Linux kernel 5.15.0)`.
 
 # Project Structure
 
