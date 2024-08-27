@@ -1,7 +1,10 @@
 /*
- * Starter code for proxy lab.
- * Feel free to modify this code in whatever way you wish.
- */
+A concurrent web proxy server that accepts incoming connections,
+reads and parses HTTP/1.0 GET requests,
+forwards requests to web servers, r
+eads the servers’ responses,
+and forwards the responses to the corresponding clients.
+*/
 
 /* Some useful includes to help you get started */
 
